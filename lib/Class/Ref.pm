@@ -27,7 +27,7 @@ use warnings;
 use Scalar::Util ();
 use Carp ();
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 OPTIONS
 
@@ -275,6 +275,7 @@ sub EXISTS    { exists $_[0][0]->[$_[1]] }
 sub DELETE    { delete $_[0][0]->[$_[1]] }
 sub EXTEND    { $_[0]->STORESIZE($_[1]) }
 sub SPLICE    { splice @{ shift->[0] }, shift, shift, @_ }
+#>>>
 
 =head1 GUTS
 
