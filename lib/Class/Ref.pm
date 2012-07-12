@@ -27,7 +27,7 @@ use warnings;
 use Scalar::Util ();
 use Carp ();
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 OPTIONS
 
@@ -88,14 +88,14 @@ our %nowrap = map { ($_ => 1) } (
 my $bless = sub {
     my ($class, $ref) = @_;
     return $ref if $raw_access;
-    my $type = Scalar::Util::reftype $ref;
+    my $type = ref $ref;
     return bless \$ref => "$class\::$type";
 };
 
 my $test = sub {
     return unless $_[0] and ref $_[0];
     return if Scalar::Util::blessed $_[0];
-    return if $nowrap{ Scalar::Util::reftype $_[0] };
+    return if $nowrap{ ref $_[0] };
     1;
 };
 
