@@ -27,7 +27,7 @@ use warnings;
 use Scalar::Util ();
 use Carp ();
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 OPTIONS
 
@@ -50,7 +50,7 @@ data rather than a wrapped form of it.
 The observant reader will note that this does not provide access to the base
 data. In order to access that, you must dereference the object:
 
-    $$o; $ returns { foo => { bar => 1 } } unblessed
+    $$o;    # returns { foo => { bar => 1 } } unblessed
 
 See L<GUTS|/GUTS> for more information.
 
@@ -101,7 +101,7 @@ my $test = sub {
 
 my $assign = sub {
     my $v = shift;
-    $$v = pop if @_;
+    $$v = shift if @_;
     return $test->($$v) ? \__PACKAGE__->$bless($$v) : $v;
 };
 
@@ -170,7 +170,10 @@ our $AUTOLOAD;
 
 sub AUTOLOAD {
     # enable access to $h->{AUTOLOAD}
-    my ($name) = defined $AUTOLOAD ? $AUTOLOAD =~ /([^:]+)$/ : ('AUTOLOAD');
+    my $name
+      = defined $AUTOLOAD
+      ? substr($AUTOLOAD, 1 + rindex $AUTOLOAD, ':')
+      : 'AUTOLOAD';
 
     # undef so that we can detect if next call is for $h->{AUTOLOAD}
     # - needed cause $AUTOLOAD stays set to previous value until next call
@@ -252,6 +255,63 @@ use overload '@{}' => sub {
     \@a;
   },
   fallback => 1;
+
+sub index {
+    my $self = shift;
+    defined(my $i = shift) or Carp::croak "No index given";
+    ${ $assign->(\$$self->[$i], @_) };
+}
+
+sub iterator {
+    my $self = shift;
+    my $raw  = $raw_access;
+    my $i    = 0;
+    return sub {
+        # preserve access mode for the life of the iterator
+        local $raw_access = $raw;
+        ${ $assign->(\$$self->[$i++]) } ;
+    };
+}
+
+our $AUTOLOAD;
+
+sub AUTOLOAD {
+    # enable access to $o->caller::AUTOLOAD
+    my $name
+      = defined $AUTOLOAD
+      ? substr($AUTOLOAD, 1 + rindex $AUTOLOAD, ':')
+      : 'AUTOLOAD';
+
+    # undef so that we can detect if next call is for $o->caller::AUTOLOAD
+    # - needed cause $AUTOLOAD stays set to previous value until next call
+    undef $AUTOLOAD;
+
+    return if $name eq 'DESTROY';
+
+    # NOTE must do this after AUTOLOAD check
+    # - weird things happen when a wrapped ARRAY is an element of a wrapped
+    #   ARRAY. tie'd ARRAYs have some lvalue magic on their FETCHed values.
+    #   As a result, this call to shift triggers the tie object call to FETCH
+    #   to ensure the lvalue is still valid.
+    my $self = shift;
+
+    # honor @ISA if the caller is using it
+    my $pkg = caller;
+    my $idx = $pkg->can($name) ? $pkg->$name : undef;
+
+    {
+        no warnings 'numeric';
+        defined $idx and $idx eq int($idx)
+          or Carp::croak "'$name' is not a numeric constant in '$pkg'";
+    }
+
+    # simulate a fetch for a non-existent index without autovivification
+    return undef unless exists $$self->[$idx] or @_;
+
+    # keep this broken up in case I decide to implement lvalues
+    my $o = $assign->(\$$self->[$idx], @_);
+    $$o;
+}
 
 package Class::Ref::ARRAY::Tie;
 
